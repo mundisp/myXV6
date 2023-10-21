@@ -1,6 +1,8 @@
 struct stat;
 struct rtcdate;
 struct rusage;
+struct pstat;
+
 // system calls
 int fork(void);
 int exit(int) __attribute__((noreturn));
@@ -24,6 +26,9 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int wait2(int*, struct rusage*);
+int getprocs(struct pstat*);
+int getpriority(void);
+int setpriority(int);
 
 // ulib.c
 int stat(const char*, struct stat*);
