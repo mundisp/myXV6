@@ -570,6 +570,7 @@ wakeup(void *chan)
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+        p->readytime = sys_uptime();
       }
       release(&p->lock);
     }
@@ -658,6 +659,34 @@ procdump(void)
     printf("\n");
   }
 }
+
+int
+procinfo(uint64 addr)
+{
+  struct proc *p;
+  struct proc *thisproc = myproc();
+  struct pstat procinfo;
+  int nprocs = 0;
+  for(p = proc; p < &proc[NPROC]; p++){ 
+    if(p->state == UNUSED)
+      continue;
+    nprocs++;
+    procinfo.pid = p->pid;
+    procinfo.state = p->state;
+    procinfo.size = p->sz;
+    if (p->parent)
+      procinfo.ppid = (p->parent)->pid;
+    else
+      procinfo.ppid = 0;
+    for (int i=0; i<16; i++)
+      procinfo.name[i] = p->name[i];
+   if (copyout(thisproc->pagetable, addr, (char *)&procinfo, sizeof(procinfo)) < 0)
+      return -1;
+    addr += sizeof(procinfo);
+  }
+  return nprocs;
+}
+
 
 
 int

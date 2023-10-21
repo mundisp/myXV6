@@ -137,6 +137,8 @@ UPROGS=\
 	$U/_time1\
 	$U/_matmul\
 	$U/_sleep\
+	$/_ps\
+	$/_pexec\
 
 
 

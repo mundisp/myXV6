@@ -111,3 +111,33 @@ sys_wait2(void)
   return wait2(p,p2);
 }
 
+uint64 
+sys_getpriority(void){
+    return myproc()->priority;
+}
+
+uint64
+sys_setpriority(void){
+
+  int priority;
+  if(argint(0, &priority)<0){
+    return -1;
+  }
+  myproc() -> priority = priority;
+  return 0;
+}
+
+uint64
+sys_getprocs(void){
+
+  uint64 addr;
+
+  if(argaddr(0, &addr) <0){
+    return -1;
+
+  }
+
+  return(procinfo(addr));
+
+}
+
