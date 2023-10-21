@@ -1,3 +1,8 @@
 {
-    "cmake.configureOnOpen": true
+    "cmake.configureOnOpen": true,
+    "files.associations": {
+        "time1": "c",
+        "types.h": "c",
+        "pstat.h": "c"
+    }
 }
