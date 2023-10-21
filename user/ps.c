@@ -2,7 +2,7 @@
 #include "kernel/types.h"
 #include "kernel/pstat.h"
 #include "user/user.h"
-
+#include "kernel/proc.h"
 int
 main(int argc, char **argv)
 {

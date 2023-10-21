@@ -3,6 +3,7 @@
 #include "user.h"
 #include "kernel/pstat.h"
 
+int
 main(int argCount, char **arg){
     if(argCount < 2){
         printf("Missing arguments\n");
