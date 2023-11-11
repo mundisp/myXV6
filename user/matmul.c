@@ -4,8 +4,8 @@
  ***
  ****************************************/
 
-#include "../kernel/types.h"
-#include "../user/user.h"
+#include "kernel/types.h"
+#include "user/user.h"
 
 #define ROWS 1000
 #define COLUMNS 1000

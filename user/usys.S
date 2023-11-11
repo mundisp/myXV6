@@ -105,8 +105,28 @@ uptime:
  li a7, SYS_uptime
  ecall
  ret
+.global getprocs
+getprocs:
+ li a7, SYS_getprocs
+ ecall
+ ret
 .global wait2
 wait2:
  li a7, SYS_wait2
+ ecall
+ ret
+.global setpriority
+setpriority:
+ li a7, SYS_setpriority
+ ecall
+ ret
+.global getpriority
+getpriority:
+ li a7, SYS_getpriority
+ ecall
+ ret
+.global freepmem
+freepmem:
+ li a7, SYS_freepmem
  ecall
  ret

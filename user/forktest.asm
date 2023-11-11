@@ -47,7 +47,7 @@ forktest(void)
 
   print("fork test\n");
   3a:	00000517          	auipc	a0,0x0
-  3e:	3fe50513          	addi	a0,a0,1022 # 438 <wait2+0xe>
+  3e:	41e50513          	addi	a0,a0,1054 # 458 <freepmem+0xe>
   42:	00000097          	auipc	ra,0x0
   46:	fbe080e7          	jalr	-66(ra) # 0 <print>
 
@@ -71,7 +71,7 @@ forktest(void)
   if(n == N){
     print("fork claimed to work N times!\n");
   64:	00000517          	auipc	a0,0x0
-  68:	3e450513          	addi	a0,a0,996 # 448 <wait2+0x1e>
+  68:	40450513          	addi	a0,a0,1028 # 468 <freepmem+0x1e>
   6c:	00000097          	auipc	ra,0x0
   70:	f94080e7          	jalr	-108(ra) # 0 <print>
     exit(1);
@@ -113,7 +113,7 @@ forktest(void)
 
   print("fork test OK\n");
   b4:	00000517          	auipc	a0,0x0
-  b8:	3e450513          	addi	a0,a0,996 # 498 <wait2+0x6e>
+  b8:	40450513          	addi	a0,a0,1028 # 4b8 <freepmem+0x6e>
   bc:	00000097          	auipc	ra,0x0
   c0:	f44080e7          	jalr	-188(ra) # 0 <print>
 }
@@ -125,7 +125,7 @@ forktest(void)
   ce:	8082                	ret
       print("wait stopped early\n");
   d0:	00000517          	auipc	a0,0x0
-  d4:	39850513          	addi	a0,a0,920 # 468 <wait2+0x3e>
+  d4:	3b850513          	addi	a0,a0,952 # 488 <freepmem+0x3e>
   d8:	00000097          	auipc	ra,0x0
   dc:	f28080e7          	jalr	-216(ra) # 0 <print>
       exit(1);
@@ -134,7 +134,7 @@ forktest(void)
   e6:	2a8080e7          	jalr	680(ra) # 38a <exit>
     print("wait got too many\n");
   ea:	00000517          	auipc	a0,0x0
-  ee:	39650513          	addi	a0,a0,918 # 480 <wait2+0x56>
+  ee:	3b650513          	addi	a0,a0,950 # 4a0 <freepmem+0x56>
   f2:	00000097          	auipc	ra,0x0
   f6:	f0e080e7          	jalr	-242(ra) # 0 <print>
     exit(1);
@@ -790,12 +790,52 @@ uptime:
  ret
  428:	8082                	ret
 
-000000000000042a <wait2>:
-.global wait2
-wait2:
- li a7, SYS_wait2
+000000000000042a <getprocs>:
+.global getprocs
+getprocs:
+ li a7, SYS_getprocs
  42a:	48d9                	li	a7,22
  ecall
  42c:	00000073          	ecall
  ret
  430:	8082                	ret
+
+0000000000000432 <wait2>:
+.global wait2
+wait2:
+ li a7, SYS_wait2
+ 432:	48dd                	li	a7,23
+ ecall
+ 434:	00000073          	ecall
+ ret
+ 438:	8082                	ret
+
+000000000000043a <setpriority>:
+.global setpriority
+setpriority:
+ li a7, SYS_setpriority
+ 43a:	48e5                	li	a7,25
+ ecall
+ 43c:	00000073          	ecall
+ ret
+ 440:	8082                	ret
+
+0000000000000442 <getpriority>:
+.global getpriority
+getpriority:
+ li a7, SYS_getpriority
+ 442:	48e1                	li	a7,24
+ ecall
+ 444:	00000073          	ecall
+ ret
+ 448:	8082                	ret
+
+000000000000044a <freepmem>:
+.global freepmem
+freepmem:
+ li a7, SYS_freepmem
+ 44a:	48e9                	li	a7,26
+ ecall
+ 44c:	00000073          	ecall
+ ret
+ 450:	8082                	ret

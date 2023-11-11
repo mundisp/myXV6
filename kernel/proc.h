@@ -2,7 +2,6 @@
 struct context {
   uint64 ra;
   uint64 sp;
-  
 
   // callee-saved
   uint64 s0;
@@ -81,11 +80,12 @@ struct trapframe {
   /* 280 */ uint64 t6;
 };
 
-enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
-
 // Per-process state
 struct proc {
   struct spinlock lock;
+  
+  //ADDING THE PRIORITY FIELD 
+  int priority;
 
   // p->lock must be held when using these:
   enum procstate state;        // Process state
@@ -93,9 +93,9 @@ struct proc {
   int killed;                  // If non-zero, have been killed
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
-  int cputime;
-  int priority;
-  uint64 readytime;
+  uint64 cputime;              // cputime field
+  uint64 readytime;	       // adding the readytime field
+
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
 
