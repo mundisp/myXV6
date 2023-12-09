@@ -47,7 +47,7 @@ forktest(void)
 
   print("fork test\n");
   3a:	00000517          	auipc	a0,0x0
-  3e:	41e50513          	addi	a0,a0,1054 # 458 <freepmem+0xe>
+  3e:	43650513          	addi	a0,a0,1078 # 470 <sem_post+0xe>
   42:	00000097          	auipc	ra,0x0
   46:	fbe080e7          	jalr	-66(ra) # 0 <print>
 
@@ -71,7 +71,7 @@ forktest(void)
   if(n == N){
     print("fork claimed to work N times!\n");
   64:	00000517          	auipc	a0,0x0
-  68:	40450513          	addi	a0,a0,1028 # 468 <freepmem+0x1e>
+  68:	41c50513          	addi	a0,a0,1052 # 480 <sem_post+0x1e>
   6c:	00000097          	auipc	ra,0x0
   70:	f94080e7          	jalr	-108(ra) # 0 <print>
     exit(1);
@@ -113,7 +113,7 @@ forktest(void)
 
   print("fork test OK\n");
   b4:	00000517          	auipc	a0,0x0
-  b8:	40450513          	addi	a0,a0,1028 # 4b8 <freepmem+0x6e>
+  b8:	41c50513          	addi	a0,a0,1052 # 4d0 <sem_post+0x6e>
   bc:	00000097          	auipc	ra,0x0
   c0:	f44080e7          	jalr	-188(ra) # 0 <print>
 }
@@ -125,7 +125,7 @@ forktest(void)
   ce:	8082                	ret
       print("wait stopped early\n");
   d0:	00000517          	auipc	a0,0x0
-  d4:	3b850513          	addi	a0,a0,952 # 488 <freepmem+0x3e>
+  d4:	3d050513          	addi	a0,a0,976 # 4a0 <sem_post+0x3e>
   d8:	00000097          	auipc	ra,0x0
   dc:	f28080e7          	jalr	-216(ra) # 0 <print>
       exit(1);
@@ -134,7 +134,7 @@ forktest(void)
   e6:	2a8080e7          	jalr	680(ra) # 38a <exit>
     print("wait got too many\n");
   ea:	00000517          	auipc	a0,0x0
-  ee:	3b650513          	addi	a0,a0,950 # 4a0 <freepmem+0x56>
+  ee:	3ce50513          	addi	a0,a0,974 # 4b8 <sem_post+0x56>
   f2:	00000097          	auipc	ra,0x0
   f6:	f0e080e7          	jalr	-242(ra) # 0 <print>
     exit(1);
@@ -800,42 +800,72 @@ getprocs:
  ret
  430:	8082                	ret
 
-0000000000000432 <wait2>:
-.global wait2
-wait2:
- li a7, SYS_wait2
+0000000000000432 <freepmem>:
+.global freepmem
+freepmem:
+ li a7, SYS_freepmem
  432:	48dd                	li	a7,23
  ecall
  434:	00000073          	ecall
  ret
  438:	8082                	ret
 
-000000000000043a <setpriority>:
-.global setpriority
-setpriority:
- li a7, SYS_setpriority
- 43a:	48e5                	li	a7,25
+000000000000043a <mmap>:
+.global mmap
+mmap:
+ li a7, SYS_mmap
+ 43a:	48e1                	li	a7,24
  ecall
  43c:	00000073          	ecall
  ret
  440:	8082                	ret
 
-0000000000000442 <getpriority>:
-.global getpriority
-getpriority:
- li a7, SYS_getpriority
- 442:	48e1                	li	a7,24
+0000000000000442 <munmap>:
+.global munmap
+munmap:
+ li a7, SYS_munmap
+ 442:	48e5                	li	a7,25
  ecall
  444:	00000073          	ecall
  ret
  448:	8082                	ret
 
-000000000000044a <freepmem>:
-.global freepmem
-freepmem:
- li a7, SYS_freepmem
+000000000000044a <sem_init>:
+.global sem_init
+sem_init:
+ li a7, SYS_sem_init
  44a:	48e9                	li	a7,26
  ecall
  44c:	00000073          	ecall
  ret
  450:	8082                	ret
+
+0000000000000452 <sem_destroy>:
+.global sem_destroy
+sem_destroy:
+ li a7, SYS_sem_destroy
+ 452:	48ed                	li	a7,27
+ ecall
+ 454:	00000073          	ecall
+ ret
+ 458:	8082                	ret
+
+000000000000045a <sem_wait>:
+.global sem_wait
+sem_wait:
+ li a7, SYS_sem_wait
+ 45a:	48f1                	li	a7,28
+ ecall
+ 45c:	00000073          	ecall
+ ret
+ 460:	8082                	ret
+
+0000000000000462 <sem_post>:
+.global sem_post
+sem_post:
+ li a7, SYS_sem_post
+ 462:	48f5                	li	a7,29
+ ecall
+ 464:	00000073          	ecall
+ ret
+ 468:	8082                	ret

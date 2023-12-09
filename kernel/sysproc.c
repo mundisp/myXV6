@@ -7,8 +7,6 @@
 #include "spinlock.h"
 #include "proc.h"
 
-uint64 freepmem(void);
-
 uint64
 sys_exit(void)
 {
@@ -45,19 +43,20 @@ sys_sbrk(void)
 {
   int addr;
   int n;
-  int new_size;
 
-  if(argint(0, &n) < 0){
+  if(argint(0, &n) < 0)
     return -1;
-  }
   addr = myproc()->sz;
-  new_size = addr + n;
   
-  if(new_size < TRAPFRAME){
-  	myproc() -> sz = new_size;
+  //if(growproc(n) < 0)
+    //return -1;
+
+  int newsz = addr + n;
+  if(newsz < TRAPFRAME){
+  	//allocate more virtual mem
+  	myproc()->sz = newsz;
   	return addr;
   }
-  
   return -1;
 }
 
@@ -105,73 +104,110 @@ sys_uptime(void)
   return xticks;
 }
 
-// return the number of active processes in the system
-// fill in user-provided data structure with pid,state,sz,ppid,name
+
 uint64
 sys_getprocs(void)
 {
-  uint64 addr;  // user pointer to struct pstat
-  //struct proc *p;  //create a pointer to struct proc
-  
-  //checks if address of first argument (index 0) passed to system call and be retrieved
-  //by argaddr function
-  if (argaddr(0, &addr) < 0){
+  uint64 addr;
+
+  if (argaddr(0, &addr) < 0)
     return -1;
-  }
-  
   return(procinfo(addr));
 }
 
-// sys_wait2
 uint64
-sys_wait2(void)
-{
-  uint64 p;
-  uint64 p2;
-  
-  if(argaddr(0, &p) < 0){
+sys_freepmem(void){
+	int freePages = freeCount() * 4096;
+	return freePages;
+}
+
+int sys_sem_init(void) {
+    uint64 s;
+    int index, value, pshared;
+
+        if (argaddr(0, &s) < 0 || argint(1, &pshared) < 0 || argint(2, &value) < 0) 
+        {
+        return -1;
+        }
+
+        if (pshared == 0)
+        {
+        return -1;}
+
+    index = semalloc();
+    semtable.sem[index].count = value;
+
+    if (copyout(myproc()->pagetable, s, (char*)&index, sizeof(index)) < 0) 
+    {
     return -1;
-  }
-  
-  if(argaddr(1, &p2) < 0){
-    return -1;
-  }
-  
-  return wait2(p, p2);
-  
+    }
+
+    return 0;
 }
 
-// sys_getprocs
-uint64
-sys_getpriority(void){
-	return myproc()->priority;
+int sys_sem_destroy(void) {
+    uint64 s;
+    int addr;
+
+    if (argaddr(0, &s) < 0) 
+        {
+        return -1;
+       }
+
+     acquire(&semtable.lock);
+
+    if (copyin(myproc()->pagetable, (char*)&addr, s, sizeof(int)) < 0)
+         {
+            release(&semtable.lock);
+            return -1;
+        }
+
+    sedealloc(addr);
+
+    release(&semtable.lock);
+
+    return 0;
 }
 
-// sys_setprocs
-uint64
-sys_setpriority(void){
-	int priority;
-	if(argint(0, &priority) < 0){
-		return -1;
-	}
-	//if(priority->MAXEFPRIORITY){
-	//	return -1;
-	//}
-	
-	myproc()->priority = priority;
-	return 0;
-}
+int sys_sem_wait(void) {
+    
+      uint64 s;
+      int addr;
 
-uint64
-sys_freepmem(void)
+    if (argaddr(0, &s) < 0 || copyin(myproc()->pagetable, (char*)&addr, s, sizeof(int)) < 0)
+    {
+        return -1;}
+
+    acquire(&semtable.sem[addr].lock);
+
+    while (semtable.sem[addr].count == 0) 
+    {
+        sleep((void*)&semtable.sem[addr], &semtable.sem[addr].lock);
+    }
+
+      semtable.sem[addr].count--;
+      release(&semtable.sem[addr].lock);
+
+      return 0;}
+
+int sys_sem_post(void)
 {
-	int res = freepmem();
-	return res;
-}
+    uint64 s;
+    int addr;
 
-uint64
-sys_memuser(void)
-{
-	int res = freepmem();
-	return res;
+    if (argaddr(0, &s) < 0 || copyin(myproc()->pagetable, (char*)&addr, s, sizeof(int)) < 0)
+    
+        {
+        return -1;
+        }
+
+
+    acquire(&semtable.sem[addr].lock);
+
+    semtable.sem[addr].count++;
+    wakeup((void*)&semtable.sem[addr]);
+
+    release(&semtable.sem[addr].lock);
+
+  return 0;
 }

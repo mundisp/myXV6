@@ -6,7 +6,7 @@
 #include "proc.h"
 #include "pstat.h"
 #include "defs.h"
-#include "syscall.h"
+#include "stat.h"
 
 struct cpu cpus[NCPU];
 
@@ -21,6 +21,10 @@ extern void forkret(void);
 static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
+
+
+struct mmr_list mmr_list[NPROC*MAX_MMR];
+struct spinlock listid_lock;
 
 // helps ensure that wakeups of wait()ing
 // parents are not lost. helps obey the
@@ -77,6 +81,7 @@ mycpu(void) {
   return c;
 }
 
+
 // Return the current struct proc *, or zero if none.
 struct proc*
 myproc(void) {
@@ -121,7 +126,6 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
-  p-> cputime = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -153,9 +157,34 @@ found:
 static void
 freeproc(struct proc *p)
 {
+
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+  for (int i = 0; i < MAX_MMR; i++) {
+	int dofree = 0;
+	if (p->mmr[i].valid == 1) {
+	if (p->mmr[i].flags & MAP_PRIVATE)
+	dofree = 1;
+	else { // MAP_SHARED
+	acquire(&mmr_list[p->mmr[i].mmr_family.listid].lock);
+	if (p->mmr[i].mmr_family.next == &(p->mmr[i].mmr_family)) { // no other family members
+	dofree = 1;
+	release(&mmr_list[p->mmr[i].mmr_family.listid].lock);
+	dealloc_mmr_listid(p->mmr[i].mmr_family.listid);
+	
+  } else { // remove p from mmr family
+	(p->mmr[i].mmr_family.next)->prev = p->mmr[i].mmr_family.prev;
+	(p->mmr[i].mmr_family.prev)->next = p->mmr[i].mmr_family.next;
+	release(&mmr_list[p->mmr[i].mmr_family.listid].lock);
+  }
+  }
+  for (uint64 addr = p->mmr[i].addr; addr < p->mmr[i].addr + p->mmr[i].length; addr += PGSIZE)
+  if (walkaddr(p->pagetable, addr))
+	uvmunmap(p->pagetable, addr, 1, dofree);
+	}
+  }
+
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
@@ -246,6 +275,9 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  
+  //HMW5------
+  p->cur_max = MAXVA - 2*PGSIZE;
 
   release(&p->lock);
 }
@@ -285,12 +317,14 @@ fork(void)
   }
 
   // Copy user memory from parent to child.
-  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+  if(uvmcopy(p->pagetable, np->pagetable, 0, p->sz) < 0){
     freeproc(np);
     release(&np->lock);
     return -1;
   }
   np->sz = p->sz;
+  //HMW5------------
+  np->cur_max = p->cur_max;
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -307,6 +341,46 @@ fork(void)
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   pid = np->pid;
+  //HMW5----------------------------------------------
+  // Copy mmr table from parent to child
+memmove((char*)np->mmr, (char *)p->mmr, MAX_MMR*sizeof(struct mmr));
+// For each valid mmr, copy memory from parent to child, allocating new memory for
+// private regions but not for shared regions, and add child to family for shared regions.
+for (int i = 0; i < MAX_MMR; i++) {
+if(p->mmr[i].valid == 1) {
+if(p->mmr[i].flags & MAP_PRIVATE) {
+for (uint64 addr = p->mmr[i].addr; addr < p->mmr[i].addr+p->mmr[i].length; addr += PGSIZE)
+if(walkaddr(p->pagetable, addr))
+if(uvmcopy(p->pagetable, np->pagetable, addr, addr+PGSIZE) < 0) {
+freeproc(np);
+release(&np->lock);
+return -1;
+}
+np->mmr[i].mmr_family.proc = np;
+np->mmr[i].mmr_family.listid = -1;
+np->mmr[i].mmr_family.next = &(np->mmr[i].mmr_family);
+np->mmr[i].mmr_family.prev = &(np->mmr[i].mmr_family);
+} else { // MAP_SHARED
+for (uint64 addr = p->mmr[i].addr; addr < p->mmr[i].addr+p->mmr[i].length; addr += PGSIZE)
+if(walkaddr(p->pagetable, addr))
+if(uvmcopyshared(p->pagetable, np->pagetable, addr, addr+PGSIZE) < 0) {
+freeproc(np);
+release(&np->lock);
+return -1;
+}
+// add child process np to family for this mapped memory region
+np->mmr[i].mmr_family.proc = np;
+np->mmr[i].mmr_family.listid = p->mmr[i].mmr_family.listid;
+acquire(&mmr_list[p->mmr[i].mmr_family.listid].lock);np->mmr[i].mmr_family.next = p->mmr[i].mmr_family.next;
+p->mmr[i].mmr_family.next = &(np->mmr[i].mmr_family);
+np->mmr[i].mmr_family.prev = &(p->mmr[i].mmr_family);
+if (p->mmr[i].mmr_family.prev == &(p->mmr[i].mmr_family))
+p->mmr[i].mmr_family.prev = &(np->mmr[i].mmr_family);
+release(&mmr_list[p->mmr[i].mmr_family.listid].lock);
+}
+}
+}
+  //------------------------------------------------
 
   release(&np->lock);
 
@@ -442,68 +516,28 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
-  struct proc *maxproc;
   
   c->proc = 0;
-  
-  //indicates an infinite loop
   for(;;){
-  	//if POLICY == 0 this will execute
-  	if(POLICY == 0){
-  		// Avoid deadlock by ensuring that devices can interrupt.
-  		intr_on();
+    // Avoid deadlock by ensuring that devices can interrupt.
+    intr_on();
 
-    		for(p = proc; p < &proc[NPROC]; p++) {
-      			acquire(&p->lock);
-      			if(p->state == RUNNABLE) {
-        			// Switch to chosen process.  It is the process's job
-        			// to release its lock and then reacquire it
-        			// before jumping back to us.
-        			p->state = RUNNING;
-        			c->proc = p;
-        			swtch(&c->context, &p->context);
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      if(p->state == RUNNABLE) {
+        // Switch to chosen process.  It is the process's job
+        // to release its lock and then reacquire it
+        // before jumping back to us.
+        p->state = RUNNING;
+        c->proc = p;
+        swtch(&c->context, &p->context);
 
-        			// Process is done running for now.
-        			// It should have changed its p->state before coming back.
-        			c->proc = 0;
-        		}
-        		release(&p->lock);
-        	}
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
       }
-      else{
-  	int maximum_process = 0;
-  	maxproc = proc;
-  	for(p = proc; p < &proc[NPROC]; p++) {
-  		acquire(&p->lock);
-  		
-  		if(p-> state == RUNNABLE){
-  			int age = sys_uptime() - p->readytime;
-  			int max_priority = p->priority + age;
-  			if(p->priority + (age) > maximum_process){
-  				maximum_process = max_priority;
-  				maxproc = p;
-  			}
-  		}
-  		release(&p->lock);
-  	}
- 
-  	intr_on();
-      	acquire(&maxproc->lock);
-      	
-      	if(maxproc->state == RUNNABLE) {
-        	// Switch to chosen process.  It is the process's job
-        	// to release its lock and then reacquire it
-        	// before jumping back to us.
-        	maxproc->state = RUNNING;
-        	c->proc = maxproc;
-        	swtch(&c->context, &maxproc->context);
-
-        	// Process is done running for now.
-        	// It should have changed its p->state before coming back.
-        	c->proc = 0;
-      		}
-      		release(&maxproc->lock);
-     }
+      release(&p->lock);
+    }
   }
 }
 
@@ -603,15 +637,12 @@ void
 wakeup(void *chan)
 {
   struct proc *p;
-  
-  //uint64 sys_uptime(void);
 
   for(p = proc; p < &proc[NPROC]; p++) {
     if(p != myproc()){
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
-        p->readytime = sys_uptime();
       }
       release(&p->lock);
     }
@@ -717,9 +748,6 @@ procinfo(uint64 addr)
     procinfo.pid = p->pid;
     procinfo.state = p->state;
     procinfo.size = p->sz;
-    procinfo.priority = p->priority;
-    procinfo.readytime = p->readytime;
-    
     if (p->parent)
       procinfo.ppid = (p->parent)->pid;
     else
@@ -732,67 +760,50 @@ procinfo(uint64 addr)
   }
   return nprocs;
 }
-
-// WAIT2
-// Wait for a child process to exit and return its status and reusage.
-// Return -1 if this process has no children.
-int
-wait2(uint64 addr, uint64 addr2)
+//HMW5-----------------------------------------------
+// Initialize mmr_list
+void
+mmrlistinit(void)
 {
-  struct proc *np;
-  int havekids, pid;
-  struct rusage cru;
-  struct proc *p = myproc();
-
-  acquire(&wait_lock);
-
-  for(;;){
-    // Scan through table looking for exited children.
-    havekids = 0;
-    for(np = proc; np < &proc[NPROC]; np++){
-      if(np->parent == p){
-        // make sure the child isn't still in exit() or swtch().
-        acquire(&np->lock);
-
-        havekids = 1;
-        if(np->state == ZOMBIE){
-          // Found one.
-          pid = np->pid;
-          
-          //copying cputime to cru and to np
-          cru.cputime = np -> cputime;
-          
-          if(addr != 0 && copyout(p->pagetable, addr, (char *)&np->xstate,
-                                  sizeof(np->xstate)) < 0) {
-            release(&np->lock);
-            release(&wait_lock);
-            return -1;
-          }
-          
-          if(addr2 != 0 && copyout(p->pagetable, addr2, (char *)&cru,
-                                  sizeof(cru)) < 0) {
-            release(&np->lock);
-            release(&wait_lock);
-            return -1;
-          }
-          
-          freeproc(np);
-          release(&np->lock);
-          release(&wait_lock);
-          return pid;
-        }
-        release(&np->lock);
-      }
-    }
-
-    // No point waiting if we don't have any children.
-    if(!havekids || p->killed){
-      release(&wait_lock);
-      return -1;
-    }
-    
-    
-    // Wait for a child to exit.
-    sleep(p, &wait_lock);  //DOC: wait-sleep
-  }
+	struct mmr_list *pmmrlist;
+	initlock(&listid_lock,"listid");
+	for (pmmrlist = mmr_list; pmmrlist < &mmr_list[NPROC*MAX_MMR]; pmmrlist++) {
+	initlock(&pmmrlist->lock, "mmrlist");
+	pmmrlist->valid = 0;
+	}
+}
+// find the mmr_list for a given listid
+struct mmr_list*
+get_mmr_list(int listid) {
+	acquire(&listid_lock);
+	if (listid >=0 && listid < NPROC*MAX_MMR && mmr_list[listid].valid) {
+	release(&listid_lock);
+	return(&mmr_list[listid]);
+	}
+	else {
+	release(&listid_lock);
+	return 0;
+	}
+}
+// free up entry in mmr_list array
+void
+dealloc_mmr_listid(int listid) {
+	acquire(&listid_lock);
+	mmr_list[listid].valid = 0;
+	release(&listid_lock);
+}
+// find an unused entry in the mmr_list array
+int
+alloc_mmr_listid() {
+	acquire(&listid_lock);
+	int listid = -1;
+	for (int i = 0; i < NPROC*MAX_MMR; i++) {
+	if (mmr_list[i].valid == 0) {
+	mmr_list[i].valid = 1;
+	listid = i;
+	break;
+	}
+	}
+	release(&listid_lock);
+	return(listid);
 }

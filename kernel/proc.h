@@ -80,12 +80,44 @@ struct trapframe {
   /* 280 */ uint64 t6;
 };
 
+//HMW5-------------------------
+// struct with lock for list of mmr family members
+struct mmr_list {
+	struct spinlock lock;
+	int valid;
+};
+	// struct for node in list of processes that share a mapped memory region
+struct mmr_node {
+	int
+	listid;
+	// index into mmr_list array with per-list locks
+	struct proc *proc;
+	// this process so it can be found easily
+	struct mmr_node *next; // next process in family
+	struct mmr_node *prev; // previous process in family
+};
+// struct for a shared memory region
+struct mmr {
+	uint64 addr; // starting address of the region
+	int length;
+	// length of the region in bytes
+	int prot;
+	// R/W/X permissions for pages in the region
+	int flags;
+	// MAP_ANONYMOUS, MAP_PRIVATE or MAP_SHARED
+	int valid;
+	// 1 if this entry is in use
+	struct file *file; // not used for HW5int fd;
+	// not used for HW5
+	struct mmr_node mmr_family; // my node in the mmr family
+};
+//-------------------------------
+
 // Per-process state
 struct proc {
   struct spinlock lock;
-  
-  //ADDING THE PRIORITY FIELD 
-  int priority;
+  struct mmr mmr[MAX_MMR]; // Array of memory-mapped regions
+  uint64 cur_max; // Max address of free virtual memory,
 
   // p->lock must be held when using these:
   enum procstate state;        // Process state
@@ -93,8 +125,6 @@ struct proc {
   int killed;                  // If non-zero, have been killed
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
-  uint64 cputime;              // cputime field
-  uint64 readytime;	       // adding the readytime field
 
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
@@ -108,6 +138,6 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  
+// initialize to MAXVA-2*PGSIZE
 };
-
-extern struct proc proc[NPROC];

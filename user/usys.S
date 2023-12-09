@@ -110,23 +110,38 @@ getprocs:
  li a7, SYS_getprocs
  ecall
  ret
-.global wait2
-wait2:
- li a7, SYS_wait2
- ecall
- ret
-.global setpriority
-setpriority:
- li a7, SYS_setpriority
- ecall
- ret
-.global getpriority
-getpriority:
- li a7, SYS_getpriority
- ecall
- ret
 .global freepmem
 freepmem:
  li a7, SYS_freepmem
+ ecall
+ ret
+.global mmap
+mmap:
+ li a7, SYS_mmap
+ ecall
+ ret
+.global munmap
+munmap:
+ li a7, SYS_munmap
+ ecall
+ ret
+.global sem_init
+sem_init:
+ li a7, SYS_sem_init
+ ecall
+ ret
+.global sem_destroy
+sem_destroy:
+ li a7, SYS_sem_destroy
+ ecall
+ ret
+.global sem_wait
+sem_wait:
+ li a7, SYS_sem_wait
+ ecall
+ ret
+.global sem_post
+sem_post:
+ li a7, SYS_sem_post
  ecall
  ret

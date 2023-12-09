@@ -5,15 +5,12 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "stat.h"
 
 struct spinlock tickslock;
 uint ticks;
-
 extern char trampoline[], uservec[], userret[];
-
-// in kernelvec.S, calls kerneltrap().
 void kernelvec();
-
 extern int devintr();
 
 void
@@ -29,89 +26,72 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
-//
-// handle an interrupt, exception, or system call from user space.
-// called from trampoline.S
-//
-void
-usertrap(void)
-{
-  int which_dev = 0;
 
-  if((r_sstatus() & SSTATUS_SPP) != 0)
-    panic("usertrap: not from user mode");
+int is_valid_address(uint64 addr, struct proc *p) {
 
-  // send interrupts and exceptions to kerneltrap(),
-  // since we're now in the kernel.
-  w_stvec((uint64)kernelvec);
-
-  struct proc *p = myproc();
-  
-  // save user program counter.
-  p->trapframe->epc = r_sepc();
-  
-  if(r_scause() == 8){
-    // system call
-
-    if(p->killed)
-      exit(-1);
-
-    // sepc points to the ecall instruction,
-    // but we want to return to the next instruction.
-    p->trapframe->epc += 4;
-
-    // an interrupt will change sstatus &c registers,
-    // so don't enable until done with those registers.
-    intr_on();
-
-    syscall();
-  } else if((which_dev = devintr()) != 0){
-    // ok
-  } else if(r_scause() == 13 || r_scause() == 15){
-  	
-    uint64 fault_addr = r_stval();
-
-  	if(fault_addr < p -> sz){
-  		char* physical_frame = kalloc();
-
-  		if(physical_frame == 0){
-  		printf("usertrap(): out of memory, pid = %d\n", p -> pid);
-  		p -> killed = 1;
- 
-  		}
-  		else
-      {
-  		memset((void*)physical_frame, 0, PGSIZE);
-  		mappages(p -> pagetable, PGROUNDDOWN(fault_addr), PGSIZE, (uint64)physical_frame, (PTE_R | PTE_W | PTE_X | PTE_U));
-  		}
-  	}
-  	else
-    {
-  	printf("usertrap(): out of memory, pid = %d, faulting_address = %p\n", p -> pid, fault_addr);
-  	  p -> killed = 1;
-  	}
-
-  } else {
-    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-    p->killed = 1;
-  }
-
-  if(p->killed)
-    exit(-1);
-
-  // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2){
-    p -> cputime++;
-    yield();
-  }
-  
-  usertrapret();
+    if (addr < p->sz) {
+        return 1; // Address is valid
+    }
+    // Check if the address falls within any special memory-mapped regions
+    for (int i = 0; i < MAX_MMR; i++) {
+        if (p->mmr[i].valid && addr >= p->mmr[i].addr && addr < (p->mmr[i].addr + p->mmr[i].length)) {
+            return 1; // Address is valid within a memory-mapped region
+        }
+    }
+    return 0; 
 }
 
-//
-// return to user space
-//
+void usertrap(void) {
+    int which_dev = 0;
+    struct proc *p = myproc();
+
+    if ((r_sstatus() & SSTATUS_SPP) != 0)
+        panic("usertrap: not from user mode");
+
+    w_stvec((uint64)kernelvec);
+    p->trapframe->epc = r_sepc();
+
+    if (r_scause() == 8) {
+        // Handle system call
+        if (p->killed) exit(-1);
+        p->trapframe->epc += 4;
+        intr_on();
+        syscall();
+    } else if ((which_dev = devintr()) != 0) {
+        // Handle device interrupts
+    } else if (r_scause() == 13 || r_scause() == 15) {
+        // Handle page fault
+        if (!is_valid_address(r_stval(), p)) {
+            p->killed = 1;
+            exit(-1);
+        }
+        void *physical_mem = kalloc();
+        if (!physical_mem) {
+            printf("usertrap(): out of memory\n");
+            p->killed = 1;
+            exit(-1);
+        }
+        if (mappages(p->pagetable, PGROUNDDOWN(r_stval()), PGSIZE, (uint64)physical_mem, PTE_R | PTE_W | PTE_X | PTE_U) < 0) {
+            kfree(physical_mem);
+            printf("usertrap(): mappages failed\n");
+            p->killed = 1;
+            exit(-1);
+        }
+    } else {
+        // Handle unexpected traps
+        printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+        printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+        p->killed = 1;
+    }
+
+    if (p->killed) exit(-1);
+    if (which_dev == 2) yield();
+
+    usertrapret();
+}
+
+
+
 void
 usertrapret(void)
 {
@@ -176,10 +156,8 @@ kerneltrap()
   }
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING){
-    myproc()->cputime++;
+  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
     yield();
-  }
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.
@@ -245,4 +223,3 @@ devintr()
     return 0;
   }
 }
-

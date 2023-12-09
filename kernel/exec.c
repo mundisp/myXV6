@@ -9,6 +9,39 @@
 
 static int loadseg(pde_t *pgdir, uint64 addr, struct inode *ip, uint offset, uint sz);
 
+char* print_prefix(int level) {
+  if (level == 2) {
+    return "..";
+  } 
+  else if (level == 1) {
+    return " .. ..";
+  }
+  return " .. .. ..";
+}
+
+void vmprint_helper(pagetable_t pagetable, char* prefix, int level) {
+  // there are 2^9 = 512 PTEs in a page table.
+  for(int k = 0; k < 512; k++) {
+    pte_t pte = pagetable[k];
+    if(pte & PTE_V) {
+      printf("%s%d: pte %p pa %p\n", prefix, k, pte, PTE2PA(pte));
+      int next_level = level - 1;
+      if (level > 0) {
+        uint64 child = PTE2PA(pte);
+        pagetable_t pt = (pagetable_t)child;
+        vmprint_helper(pt, print_prefix(next_level), next_level);
+      }
+    }
+  }
+}
+
+void vmprint(pagetable_t pagetable)
+{
+  printf("page table %p\n", pagetable);
+  vmprint_helper(pagetable, " ..", 2);
+}
+
+
 int
 exec(char *path, char **argv)
 {

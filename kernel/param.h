@@ -11,11 +11,6 @@
 #define NBUF         (MAXOPBLOCKS*3)  // size of disk block cache
 #define FSSIZE       1000  // size of file system in blocks
 #define MAXPATH      128   // maximum file path name
-#define MAXEFFPRIORITY  99 //range of integers for effective priorities
-#define POLICY		1  //
-#define ROUNDROBIN	0  //
-#define PRIORITY	1  //
-
-//effective_priority = min(MAXEFFPRIORITY, priority + (currtime - readytime));
-
+#define MAX_MMR		10 // maximum number of memory-mapped regions per process
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+#define NSEM         100 // maximum open semaphores per system

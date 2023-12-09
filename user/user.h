@@ -1,7 +1,6 @@
 struct stat;
 struct rtcdate;
 struct pstat;
-struct rusage;
 
 // system calls
 int fork(void);
@@ -26,10 +25,13 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int getprocs(struct pstat*);
-int wait2(int*, struct rusage*);
-int getpriority(void); //ADDING "getpriority" TO SYSTEM CALLS
-int setpriority(int); //ADDING "setpriority' TO SYSTEM CALLS
-int freepmem(void); //ADDING "freepmem" to SYSTEM CALLS
+uint64 freepmem(void);
+void* mmap(void*, int, int, int, int, void*);
+int munmap(void*, int);
+int sem_init(void*, int, int);
+int sem_destroy(void*);
+int sem_wait(void*);
+int sem_post(void*);
 
 // ulib.c
 int stat(const char*, struct stat*);
